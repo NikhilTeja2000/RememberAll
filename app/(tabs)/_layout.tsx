@@ -15,29 +15,51 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
+        headerShown: true,
+        headerStyle: {
+          height: 80,
+        },
+        headerTitleStyle: {
+          fontSize: 24,
+        },
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,
         tabBarStyle: Platform.select({
           ios: {
-            // Use a transparent background on iOS to show the blur effect
             position: 'absolute',
+            height: 80,
           },
-          default: {},
+          default: {
+            height: 80,
+          },
         }),
+        tabBarLabelStyle: {
+          fontSize: 18,
+          paddingBottom: 10,
+        },
       }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: 'People',
+          headerTitle: 'My People',
+          tabBarIcon: ({ color }) => <IconSymbol size={36} name="person.2.fill" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="notes"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: 'Notes',
+          headerTitle: 'All Notes',
+          tabBarIcon: ({ color }) => <IconSymbol size={36} name="note.text" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+          headerTitle: 'Settings',
+          tabBarIcon: ({ color }) => <IconSymbol size={36} name="gear" color={color} />,
         }}
       />
     </Tabs>
