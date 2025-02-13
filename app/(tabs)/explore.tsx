@@ -44,24 +44,13 @@ export default function ExploreScreen() {
         return;
       }
 
-      // Start watching location
-      const subscription = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.Balanced,
-          timeInterval: 120000, // 2 minutes
-          distanceInterval: 100, // 100 meters
-        },
-        async (location) => {
-          try {
-            const address = await reverseGeocode(location.coords);
-            await updateLocationHistory(location.coords, address);
-          } catch (error) {
-            console.error('Error updating location:', error);
-          }
-        }
-      );
-
-      setLocationSubscription(subscription);
+      // Request background permissions
+      let { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
+      if (backgroundStatus !== 'granted') {
+        Alert.alert('Permission Denied', 'Background location permission is required.');
+        return;
+      }
+  
     } catch (error) {
       console.error('Error setting up location tracking:', error);
     }
