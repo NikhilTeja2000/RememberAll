@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { StyleSheet, FlatList, View, TouchableOpacity, Modal } from 'react-native';
+import { StyleSheet, FlatList, View, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import { StorageService, Person, Note } from '@/services/storage';
@@ -18,24 +18,49 @@ export default function NotesScreen() {
   const [filter, setFilter] = useState<'all' | 'red' | 'yellow' | 'green'>('all');
   const theme = useColorScheme() ?? 'light';
   const [people, setPeople] = useState<Person[]>([]);
+  const [filteredPeople, setFilteredPeople] = useState<Person[]>([]);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [showNotes, setShowNotes] = useState(false);
 
-  const FilterButton = ({ type }: { type: typeof filter }) => (
+  const getFilterButtonStyle = (color: 'all' | 'red' | 'yellow' | 'green') => {
+    if (color === 'all') {
+      return {
+        backgroundColor: filter === 'all' ? Colors[theme].tint : 'transparent',
+        borderColor: Colors[theme].tint,
+      };
+    }
+    
+    const colorMap = {
+      red: '#FF4444',
+      yellow: '#FFBB33',
+      green: '#00C851',
+    };
+    
+    return {
+      backgroundColor: filter === color ? colorMap[color] : 'transparent',
+      borderColor: colorMap[color],
+    };
+  };
+
+  const FilterButton = ({ color, label }: { color: 'all' | 'red' | 'yellow' | 'green'; label: string }) => (
     <TouchableOpacity
       style={[
         styles.filterButton,
-        filter === type && styles.filterButtonActive,
-        type !== 'all' && { backgroundColor: type },
+        getFilterButtonStyle(color),
       ]}
-      onPress={() => setFilter(type)}>
+      onPress={() => setFilter(color)}
+    >
       <ThemedText
         style={[
-          styles.filterText,
-          filter === type && styles.filterTextActive,
-          type !== 'all' && { color: '#000000' },
-        ]}>
-        {type.charAt(0).toUpperCase() + type.slice(1)}
+          styles.filterButtonText,
+          { 
+            color: filter === color ? 
+              (color === 'all' ? '#FFFFFF' : '#000000') : 
+              (color === 'all' ? Colors[theme].text : colorMap[color])
+          }
+        ]}
+      >
+        {label}
       </ThemedText>
     </TouchableOpacity>
   );
@@ -67,6 +92,19 @@ export default function NotesScreen() {
     const interval = setInterval(loadNotes, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    filterPeople();
+  }, [filter, people]);
+
+  const filterPeople = () => {
+    if (filter === 'all') {
+      setFilteredPeople(people);
+    } else {
+      const filtered = people.filter(person => person.tag === filter);
+      setFilteredPeople(filtered);
+    }
+  };
 
   const formatDate = (timestamp: string) => {
     return new Date(timestamp).toLocaleString();
@@ -102,34 +140,41 @@ export default function NotesScreen() {
   return (
     <ThemedView style={styles.container}>
       <View style={styles.filterContainer}>
-        <FilterButton type="all" />
-        <FilterButton type="red" />
-        <FilterButton type="yellow" />
-        <FilterButton type="green" />
+        <FilterButton color="all" label="All" />
+        <FilterButton color="red" label="Red" />
+        <FilterButton color="yellow" label="Yellow" />
+        <FilterButton color="green" label="Green" />
       </View>
 
-      <FlatList
-        data={filteredNotes}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity 
-            onPress={() => handleNotePress(item)}
-            style={styles.noteContainer}
+      <ScrollView style={styles.content}>
+        {filteredPeople.map((person) => (
+          <View
+            key={person.id}
+            style={[
+              styles.noteCard,
+              { backgroundColor: theme === 'light' ? '#F5F5F5' : '#2A2A2A' },
+              { borderLeftColor: person.tag === 'red' ? '#FF4444' : 
+                               person.tag === 'yellow' ? '#FFBB33' : 
+                               '#00C851' }
+            ]}
           >
-            <View style={[styles.noteItem, { 
-              backgroundColor: theme === 'light' ? '#F5F5F5' : '#2A2A2A' 
-            }]}>
-              <View style={styles.noteHeader}>
-                <ThemedText type="defaultSemiBold">{item.personName}</ThemedText>
-                <ThemedText style={styles.relation}>{item.personRelation}</ThemedText>
+            <ThemedText style={styles.personName}>{person.name}</ThemedText>
+            <ThemedText style={styles.relation}>{person.relation}</ThemedText>
+            {person.notes && person.notes.length > 0 && (
+              <View style={styles.notesContainer}>
+                {person.notes.map((note, index) => (
+                  <View key={note.id} style={styles.noteItem}>
+                    <ThemedText style={styles.noteText}>{note.text}</ThemedText>
+                    <ThemedText style={styles.timestamp}>
+                      {new Date(note.timestamp).toLocaleDateString()}
+                    </ThemedText>
+                  </View>
+                ))}
               </View>
-              <ThemedText style={styles.noteText}>{item.text}</ThemedText>
-              <ThemedText style={styles.timestamp}>{formatDate(item.timestamp)}</ThemedText>
-            </View>
-          </TouchableOpacity>
-        )}
-        contentContainerStyle={styles.listContent}
-      />
+            )}
+          </View>
+        ))}
+      </ScrollView>
 
       {showNotes && selectedPerson && (
         <Modal visible={showNotes} animationType="slide">
@@ -149,60 +194,68 @@ export default function NotesScreen() {
   );
 }
 
+const colorMap = {
+  red: '#FF4444',
+  yellow: '#FFBB33',
+  green: '#00C851',
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
   filterContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    gap: 8,
+    justifyContent: 'space-around',
   },
   filterButton: {
-    padding: 8,
-    borderRadius: 16,
-    minWidth: 80,
-    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
   },
-  filterButtonActive: {
-    backgroundColor: '#E0E0E0',
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
-  filterText: {
-    fontSize: 16,
-  },
-  filterTextActive: {
-    fontWeight: 'bold',
-  },
-  noteContainer: {
-    marginHorizontal: 16,
-    marginVertical: 8,
-  },
-  noteItem: {
+  content: {
+    flex: 1,
     padding: 16,
-    borderRadius: 12,
   },
-  noteHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+  noteCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+  },
+  personName: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 4,
   },
   relation: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 14,
+    marginBottom: 8,
+    opacity: 0.7,
+  },
+  notesContainer: {
+    marginTop: 8,
+  },
+  noteItem: {
+    marginTop: 8,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.05)',
   },
   noteText: {
-    fontSize: 18,
-    marginVertical: 8,
+    fontSize: 14,
   },
   timestamp: {
-    fontSize: 14,
-    color: '#666',
-  },
-  listContent: {
-    paddingVertical: 8,
+    fontSize: 12,
+    opacity: 0.6,
+    marginTop: 4,
   },
   modalContainer: {
     flex: 1,

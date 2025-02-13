@@ -14,6 +14,8 @@ export default function ExploreScreen() {
   const [showLocations, setShowLocations] = useState(false);
   const theme = useColorScheme() ?? 'light';
   const [locationSubscription, setLocationSubscription] = useState<Location.LocationSubscription | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredLocations, setFilteredLocations] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     age: '',
@@ -36,6 +38,15 @@ export default function ExploreScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    if (userDetails?.locations) {
+      const filtered = userDetails.locations.filter(location =>
+        location.address.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredLocations(filtered);
+    }
+  }, [searchQuery, userDetails?.locations]);
+
   const setupLocationTracking = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -43,7 +54,7 @@ export default function ExploreScreen() {
         Alert.alert('Permission Denied', 'Location permission is required to track visited places.');
         return;
       }
-
+  
       // Request background permissions
       let { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
       if (backgroundStatus !== 'granted') {
@@ -51,6 +62,20 @@ export default function ExploreScreen() {
         return;
       }
   
+      // Start location updates
+      const subscription = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: 120000, // 2 minutes
+          distanceInterval: 0,
+        },
+        async (location) => {
+          const address = await reverseGeocode(location.coords);
+          await updateLocationHistory(location.coords, address);
+        }
+      );
+
+      setLocationSubscription(subscription);
     } catch (error) {
       console.error('Error setting up location tracking:', error);
     }
@@ -112,20 +137,30 @@ export default function ExploreScreen() {
         };
         await StorageService.updateUserDetails(initialDetails);
         setUserDetails(initialDetails);
-        setFormData(initialDetails);
       } else {
         setUserDetails(details);
-        setFormData({
-          name: details.name || '',
-          age: details.age || '',
-          phoneNumber: details.phoneNumber || '',
-          address: details.address || '',
-        });
       }
     } catch (error) {
       console.error('Error loading user details:', error);
       Alert.alert('Error', 'Failed to load user details');
     }
+  };
+
+  const formatDate = (timestamp: string) => {
+    return new Date(timestamp).toLocaleString();
+  };
+  const InfoItem = ({ label, value }: { label: string; value: string | undefined }) => (
+    <View style={styles.infoItem}>
+      <ThemedText style={styles.infoLabel}>{label}:</ThemedText>
+      <ThemedText style={styles.infoValue}>{value || 'N/A'}</ThemedText>
+    </View>
+  );
+  
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setShowLocations(false);
+    loadUserDetails();
   };
 
   const handleEdit = () => {
@@ -163,23 +198,6 @@ export default function ExploreScreen() {
       console.error('Error saving user details:', error);
       Alert.alert('Error', 'Failed to save user details');
     }
-  };
-
-  const formatDate = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString();
-  };
-  const InfoItem = ({ label, value }: { label: string; value: string | undefined }) => (
-    <View style={styles.infoItem}>
-      <ThemedText style={styles.infoLabel}>{label}:</ThemedText>
-      <ThemedText style={styles.infoValue}>{value || 'N/A'}</ThemedText>
-    </View>
-  );
-  
-
-  const handleCancel = () => {
-    setIsEditing(false);
-    setShowLocations(false);
-    loadUserDetails();
   };
 
   return (
@@ -222,7 +240,6 @@ export default function ExploreScreen() {
         </View>
       </ScrollView>
 
-      {/* Edit Modal */}
       <Modal visible={isEditing} animationType="slide">
         <ThemedView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
@@ -313,7 +330,6 @@ export default function ExploreScreen() {
         </ThemedView>
       </Modal>
 
-      {/* Locations Modal */}
       <Modal visible={showLocations} animationType="slide">
         <ThemedView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
@@ -330,11 +346,30 @@ export default function ExploreScreen() {
             </TouchableOpacity>
           </View>
 
+          <View style={styles.searchContainer}>
+            <TextInput
+              style={[styles.searchInput, { 
+                color: Colors[theme].text,
+                backgroundColor: theme === 'light' ? '#FFFFFF' : '#2A2A2A',
+              }]}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search locations..."
+              placeholderTextColor={Colors[theme].tabIconDefault}
+            />
+          </View>
+
           <ScrollView style={styles.modalContent}>
-            {userDetails?.locations && userDetails.locations.length > 0 ? (
+            {filteredLocations.length > 0 ? (
               <View style={styles.locationList}>
-                {userDetails.locations.map((location, index) => (
-                  <View key={index} style={[styles.locationItem, { backgroundColor: theme === 'light' ? '#F5F5F5' : '#2A2A2A' }]}>
+                {filteredLocations.map((location, index) => (
+                  <View 
+                    key={index} 
+                    style={[
+                      styles.locationItem, 
+                      { backgroundColor: theme === 'light' ? '#F5F5F5' : '#2A2A2A' }
+                    ]}
+                  >
                     <ThemedText>{location.address}</ThemedText>
                     <ThemedText style={styles.timestamp}>
                       {formatDate(location.timestamp)}
@@ -344,16 +379,12 @@ export default function ExploreScreen() {
               </View>
             ) : (
               <View style={styles.emptyState}>
-                <ThemedText>No location history available</ThemedText>
+                <ThemedText>
+                  {searchQuery ? 'No matching locations found' : 'No location history available'}
+                </ThemedText>
               </View>
             )}
           </ScrollView>
-
-          <TouchableOpacity
-            style={[styles.closeButton, { backgroundColor: Colors[theme].error }]}
-            onPress={() => setShowLocations(false)}>
-            <ThemedText style={{ color: '#FFFFFF' }}>Close</ThemedText>
-          </TouchableOpacity>
         </ThemedView>
       </Modal>
     </ThemedView>
@@ -426,7 +457,16 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   infoItem: {
-    gap: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  infoLabel: {
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  infoValue: {
+    flex: 1,
   },
   label: {
     color: '#666',
@@ -520,19 +560,49 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 16,
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingVertical: 8,
     paddingHorizontal: 4,
+  },
+  searchContainer: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+  },
+  searchSection: {
+    marginBottom: 20,
+    gap: 8,
+  },
+  peopleList: {
+    marginBottom: 24,
+  },
+  personCard: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  personName: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  personDetails: {
+    fontSize: 14,
+    color: '#666',
   },
 });

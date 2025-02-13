@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Modal, FlatList, Alert, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Modal, FlatList, Alert, TouchableOpacity, TextInput, ActivityIndicator, ScrollView } from 'react-native';
 import { SearchHeader } from '@/components/SearchHeader';
 import { PersonCard } from '@/components/PersonCard';
 import { AddPersonForm } from '@/components/AddPersonForm';
@@ -10,6 +10,26 @@ import { PersonView } from '@/components/PersonView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { ThemedText } from '@/components/ThemedText';
 import { Colors } from '@/constants/Colors';
+import { useColorScheme } from 'react-native';
+import { Image } from 'react-native';
+
+const formatLastVisited = (timestamp: string): string => {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  const diffInDays = Math.floor(diffInHours / 24);
+
+  if (diffInMinutes < 60) {
+    return diffInMinutes <= 1 ? 'Just now' : `${diffInMinutes} minutes ago`;
+  } else if (diffInHours < 24) {
+    return diffInHours === 1 ? '1 hour ago' : `${diffInHours} hours ago`;
+  } else if (diffInDays < 7) {
+    return diffInDays === 1 ? 'Yesterday' : `${diffInDays} days ago`;
+  } else {
+    return date.toLocaleDateString();
+  }
+};
 
 export default function HomeScreen() {
   const [people, setPeople] = useState<Person[]>([]);
@@ -20,7 +40,8 @@ export default function HomeScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [theme, setTheme] = useState('light');
+  const [isLoading, setIsLoading] = useState(true);
+  const theme = useColorScheme() ?? 'light';
 
   useEffect(() => {
     loadPeople();
@@ -28,16 +49,29 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredPeople(people);
+    } else {
+      const filtered = people.filter(person =>
+        person.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        person.relation.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (person.description?.toLowerCase() || '').includes(searchQuery.toLowerCase())
+      );
+      setFilteredPeople(filtered);
+    }
+  }, [searchQuery, people]);
+
   const loadPeople = async () => {
     try {
+      setIsLoading(true);
       const loadedPeople = await StorageService.getPeople();
       setPeople(loadedPeople);
-      
-      if (!searchQuery) {
-        setFilteredPeople(loadedPeople);
-      }
+      setFilteredPeople(loadedPeople);
     } catch (error) {
       console.error('Error loading people:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -60,7 +94,6 @@ export default function HomeScreen() {
     relation: string;
     tag: 'red' | 'yellow' | 'green';
     description?: string;
-    notes?: string;
     image?: string;
   }) => {
     if (!data.name || !data.relation || !data.tag) {
@@ -73,9 +106,8 @@ export default function HomeScreen() {
       relation: data.relation,
       tag: data.tag,
       description: data.description,
-      notes: [],
-      lastVisited: new Date().toISOString(),
       image: data.image,
+      lastVisited: new Date().toISOString(),
     });
 
     if (success) {
@@ -116,24 +148,62 @@ export default function HomeScreen() {
   };
 
   const handleDeletePerson = async (id: string) => {
+    console.log('Delete triggered for ID:', id); // Debug log
+    
+    if (!id) {
+      console.error('No ID provided for deletion');
+      return;
+    }
+
+    // First, find the person to be deleted
+    const personToDelete = people.find(p => p.id === id);
+    if (!personToDelete) {
+      console.error('Person not found for deletion');
+      return;
+    }
+
+    // Show the confirmation alert
     Alert.alert(
-      'Confirm Delete',
-      'Are you sure you want to delete this person?',
+      'Delete Person',
+      `Are you sure you want to delete ${personToDelete.name}?`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => console.log('Delete cancelled')
+        },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            const success = await StorageService.deletePerson(id);
-            if (success) {
-              loadPeople();
-            } else {
-              Alert.alert('Error', 'Failed to delete person');
+            try {
+              console.log('Delete confirmed for:', personToDelete.name);
+              const success = await StorageService.deletePerson(id);
+              
+              if (success) {
+                console.log('Delete successful');
+                // Update local state
+                setPeople(prev => prev.filter(p => p.id !== id));
+                setFilteredPeople(prev => prev.filter(p => p.id !== id));
+                
+                // Close modals if needed
+                if (selectedPerson?.id === id) {
+                  setShowDetails(false);
+                  setShowNotes(false);
+                  setShowAddForm(false);
+                  setSelectedPerson(null);
+                }
+              } else {
+                Alert.alert('Error', 'Failed to delete person');
+              }
+            } catch (error) {
+              console.error('Error during deletion:', error);
+              Alert.alert('Error', 'An error occurred while deleting');
             }
-          },
-        },
-      ]
+          }
+        }
+      ],
+      { cancelable: true }
     );
   };
 
@@ -217,7 +287,10 @@ export default function HomeScreen() {
                 setShowAddForm(true);
               }}
               onView={() => handleViewPerson(item)}
-              onDelete={() => handleDeletePerson(item.id)}
+              onDelete={() => {
+                console.log('Delete requested for:', item.name); // Debug log
+                handleDeletePerson(item.id);
+              }}
             />
           )
         )}
@@ -242,7 +315,13 @@ export default function HomeScreen() {
           <AddPersonForm
             onSubmit={isEditing ? handleEditPerson : handleAddPerson}
             onCancel={closeAddForm}
-            initialData={isEditing && selectedPerson ? selectedPerson : undefined}
+            initialData={isEditing && selectedPerson ? {
+              name: selectedPerson.name,
+              relation: selectedPerson.relation,
+              tag: selectedPerson.tag,
+              description: selectedPerson.description,
+              image: selectedPerson.image,
+            } : undefined}
           />
         </ThemedView>
       </Modal>
@@ -329,5 +408,131 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 8,
     paddingHorizontal: 4,
+  },
+  searchContainer: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  content: {
+    flex: 1,
+  },
+  card: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  cardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  personInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  personImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  personImagePlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  placeholderText: {
+    fontSize: 16,
+    opacity: 0.7,
+  },
+  textContainer: {
+    flexDirection: 'column',
+  },
+  name: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  relation: {
+    fontSize: 16,
+    opacity: 0.7,
+  },
+  description: {
+    fontSize: 14,
+    opacity: 0.7,
+  },
+  lastVisitedContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+  },
+  lastVisitedLabel: {
+    fontSize: 14,
+    opacity: 0.7,
+  },
+  lastVisitedTime: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    opacity: 0.7,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  actionButton: {
+    padding: 8,
+    borderRadius: 20,
+    marginLeft: 8,
+  },
+  editButton: {
+    backgroundColor: '#F0F0F0',
+  },
+  deleteButton: {
+    backgroundColor: '#FFE5E5',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
   },
 });

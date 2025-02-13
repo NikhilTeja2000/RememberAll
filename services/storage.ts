@@ -160,16 +160,17 @@ export const StorageService = {
 
   async deletePerson(id: string): Promise<boolean> {
     try {
-      const people = await this.getPeople();
-      const filteredPeople = people.filter((person) => person.id !== id);
+      console.log('Starting delete operation for ID:', id); // Debug log
+      const currentPeople = await this.getPeople();
+      console.log('Current people:', currentPeople); // Debug log
       
-      await storage.setItem(
-        STORAGE_KEYS.PEOPLE,
-        JSON.stringify(filteredPeople)
-      );
+      const updatedPeople = currentPeople.filter(person => person.id !== id);
+      console.log('Updated people after filter:', updatedPeople); // Debug log
+      
+      await storage.setItem(STORAGE_KEYS.PEOPLE, JSON.stringify(updatedPeople));
       return true;
     } catch (error) {
-      console.error('Error deleting person:', error);
+      console.error('Error in deletePerson:', error);
       return false;
     }
   },
@@ -269,6 +270,8 @@ export const StorageService = {
       const newLocation: Location = {
         timestamp: new Date().toISOString(),
         address,
+        latitude: 0,
+        longitude: 0,
       };
 
       details.locations = [newLocation, ...(details.locations || [])];
@@ -277,6 +280,16 @@ export const StorageService = {
     } catch (error) {
       console.error('Error adding location:', error);
       return false;
+    }
+  },
+
+  async getAllUsers(): Promise<UserDetails[]> {
+    try {
+      const allUsers = await AsyncStorage.getItem('allUsers');
+      return allUsers ? JSON.parse(allUsers) : [];
+    } catch (error) {
+      console.error('Error getting all users:', error);
+      return [];
     }
   },
 }; 

@@ -35,6 +35,11 @@ export function PersonCard({
     green: theme === 'light' ? '#E5FFE5' : '#296629',
   };
 
+  const handleDeletePress = (event: any) => {
+    event.stopPropagation();
+    onDelete();
+  };
+
   return (
     <View style={[styles.container, { 
       backgroundColor: tagColors[tag],
@@ -69,7 +74,10 @@ export function PersonCard({
           <ThemedText>Edit</ThemedText>
         </TouchableOpacity>
         
-        <TouchableOpacity onPress={onDelete} style={[styles.button, styles.deleteButton]}>
+        <TouchableOpacity 
+          onPress={handleDeletePress}
+          style={[styles.button, styles.deleteButton]}
+        >
           <IconSymbol name="trash" size={24} color="#D32F2F" />
           <ThemedText style={{ color: '#D32F2F' }}>Delete</ThemedText>
         </TouchableOpacity>
