@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import * as React from 'react';
+import { useState, useEffect } from 'react';
 import { StyleSheet, View, Modal, FlatList, Alert, TouchableOpacity, TextInput, ActivityIndicator, ScrollView } from 'react-native';
 import { SearchHeader } from '@/components/SearchHeader';
 import { PersonCard } from '@/components/PersonCard';
