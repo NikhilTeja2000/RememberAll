@@ -9,12 +9,12 @@ import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const theme = useColorScheme() ?? 'light';
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: Colors[theme].tint,
         headerShown: true,
         headerStyle: {
           height: 80,
@@ -41,25 +41,22 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'People',
-          headerTitle: 'My People',
-          tabBarIcon: ({ color }) => <IconSymbol size={36} name="person.2.fill" color={color} />,
+          title: 'Home',
+          tabBarIcon: ({ color }) => <IconSymbol name="house.fill" size={28} color={color} />,
         }}
       />
       <Tabs.Screen
         name="notes"
         options={{
           title: 'Notes',
-          headerTitle: 'All Notes',
-          tabBarIcon: ({ color }) => <IconSymbol size={36} name="note.text" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol name="note.text" size={28} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="settings"
+        name="explore"
         options={{
-          title: 'Settings',
-          headerTitle: 'Settings',
-          tabBarIcon: ({ color }) => <IconSymbol size={36} name="gear" color={color} />,
+          title: 'Explore',
+          tabBarIcon: ({ color }) => <IconSymbol name="location.fill" size={28} color={color} />,
         }}
       />
     </Tabs>
